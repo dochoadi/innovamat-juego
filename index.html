@@ -686,7 +686,7 @@ function loadData(pid) {
   d = d || mem[pid] || defaults();
   d = Object.assign(defaults(), d, {skin: Object.assign(defaults().skin, d.skin || {})});
   if (!THEMES[d.theme]) d.theme = 'futbol';
-  if (!(d.level >= 1 && d.level <= 6)) d.level = 1;
+  if (!(d.level >= 0 && d.level <= 6)) d.level = 1;
   return d;
 }
 function saveData() {
@@ -763,9 +763,10 @@ const MODES = [
   ['falta', '🧩', 'Completa el salto', 'Encuentra el salto que falta'],
   ['mult', '✖️', 'Saltos repetidos', 'Multiplica con saltos iguales'],
   ['div', '➗', 'Reparto a saltos', '¿Cuántos saltos caben?'],
+  ['azar', '🎲', 'Suma y resta al azar', 'Cualquier nivel, sumas y restas'],
   ['mix', '🏆', 'Liga mixta', 'Todos los trucos mezclados']
 ];
-const LEVELS = [[1, 'Nivel 1', 'hasta 20'], [2, 'Nivel 2', 'hasta 50'], [3, 'Nivel 3', 'hasta 100'], [4, 'Nivel 4', 'hasta 200'], [5, 'Nivel 5', 'hasta 500'], [6, 'Nivel 6', 'hasta 1000']];
+const LEVELS = [[0, '🎲 Al azar', 'todos los niveles'], [1, 'Nivel 1', 'hasta 20'], [2, 'Nivel 2', 'hasta 50'], [3, 'Nivel 3', 'hasta 100'], [4, 'Nivel 4', 'hasta 200'], [5, 'Nivel 5', 'hasta 500'], [6, 'Nivel 6', 'hasta 1000']];
 function renderMenu() {
   const d = S.data;
   $('hello').textContent = '¡Hola, ' + S.name + '!';
@@ -782,7 +783,7 @@ function renderMenu() {
   const tl = $('tiles'); tl.replaceChildren();
   for (const [key, ic, name, sub] of MODES) {
     const b = document.createElement('button'); b.className = 'tile';
-    const best = d.best[key + d.level] || 0;
+    const best = d.best[key + (key === 'azar' ? 0 : d.level)] || 0;
     b.innerHTML = '<span class="i">' + ic + '</span><b>' + name + '</b><small>' + sub + '</small><span class="st">' + '⭐'.repeat(Math.ceil(best / 5)) + (best ? ' ' + best + '/15' : 'Sin jugar') + '</span>';
     b.onclick = () => startMatch(key); tl.append(b);
   }
@@ -887,8 +888,9 @@ function startMatch(mode) {
 }
 function nextRound() {
   if (S.ri >= ROUNDS) return endMatch();
-  const m = S.mode === 'mix' ? pick(['suma', 'resta', 'dist', 'comp', 'falta']) : S.mode;
-  R = makeProblem(m, S.data.level);
+  const m = S.mode === 'mix' ? pick(['suma', 'resta', 'dist', 'comp', 'falta']) : S.mode === 'azar' ? pick(['suma', 'resta', 'suma', 'resta', 'comp', 'dist']) : S.mode;
+  const lv = S.mode === 'azar' || S.data.level === 0 ? ri(1, 6) : S.data.level;
+  R = makeProblem(m, lv);
   R.jumps = []; R.pos = R.start; R.hint = 0; R.wrongQ = 0; R.state = 'play'; R.dir = R.sign < 0 ? -1 : 1; R.stars = 0;
   R.landings = [R.start];
   anim = null; busy = false; parts = []; banner = null; vlo = null;
@@ -940,7 +942,7 @@ function renderPanel() {
     d.children[0].onclick = () => { R.dir = 1; syncDir(); }; d.children[1].onclick = () => { R.dir = -1; syncDir(); };
   }
   const ch = document.createElement('div'); ch.className = 'chips'; ch.id = 'chips';
-  const groups = single ? [R.vals] : [R.vals.filter(v => v < 10 || (S.data.level === 1 && v === 10)), R.vals.filter(v => v >= 10 && v < 100 && S.data.level > 1), R.vals.filter(v => v >= 100)];
+  const groups = single ? [R.vals] : [R.vals.filter(v => v < 10 || (R.level === 1 && v === 10)), R.vals.filter(v => v >= 10 && v < 100 && R.level > 1), R.vals.filter(v => v >= 100)];
   for (const g of groups) {
     if (!g.length) continue;
     const row = document.createElement('div'); row.className = 'chiprow'; row.style.gridTemplateColumns = single ? '1fr' : 'repeat(' + (g.length > 9 ? 5 : Math.max(g.length, 5)) + ',minmax(0,1fr))';
@@ -1047,7 +1049,7 @@ function finishRound() {
 }
 function endMatch() {
   const d = S.data, before = unlocked(d.total);
-  d.total += S.gained; const key = S.mode + d.level; d.best[key] = Math.max(d.best[key] || 0, S.gained); saveData();
+  d.total += S.gained; const key = S.mode + (S.mode === 'azar' ? 0 : d.level); d.best[key] = Math.max(d.best[key] || 0, S.gained); saveData();
   const after = unlocked(d.total);
   $('rtitle').textContent = S.gained >= 13 ? '¡Campeón! 🏆' : S.gained >= 9 ? '¡Gran partido! 🎉' : '¡Buen intento! 💪';
   $('rsub').textContent = 'Has ganado ' + S.gained + ' de ' + ROUNDS * 3 + ' estrellas.';
