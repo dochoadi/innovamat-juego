@@ -29,3 +29,7 @@ El repositorio es privado, así que GitHub Pages gratis no sirve. Opciones:
 Notas: si no suena en iPhone, quita el modo silencio y toca la pantalla una vez. El progreso se guarda en cada dispositivo.
 
 Solo como fichero: en Android se puede abrir `index.html` con Chrome; en iOS Safari no abre ficheros locales (haría falta una app como *Documents by Readdle*).
+
+## Progreso y versiones
+Las estrellas, victorias y cromos se guardan en el dispositivo y **se conservan al actualizar el juego** (datos versionados, con copia doble y migración). Botón **💾 Copia de seguridad** en la pantalla de jugadores: copia un código para pasar el progreso a otro dispositivo o restaurarlo.
+Nota iOS: la app añadida a la pantalla de inicio y Safari guardan datos por separado; usa la copia de seguridad para moverlos.

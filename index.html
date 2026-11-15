@@ -126,7 +126,7 @@ a{color:var(--acc)}
     <p class="sub">Pulsa tu nombre o añade un jugador nuevo.</p>
     <div class="players" id="plist"></div>
     <form class="add" id="addf" autocomplete="off"><input id="newname" maxlength="12" placeholder="Nombre del jugador" aria-label="Nombre"><button class="btn" type="submit">+ Añadir</button><p class="msg" id="addmsg" role="status"></p></form>
-    <div class="row"><button class="btn sec" id="manage">Editar / borrar jugadores</button></div>
+    <div class="row"><button class="btn sec" id="manage">Editar / borrar jugadores</button><button class="btn sec" id="bkb">💾 Copia de seguridad</button></div>
   </section>
 
   <section class="view" id="vMenu">
@@ -158,6 +158,16 @@ a{color:var(--acc)}
 </main>
 </div>
 
+<dialog id="backup">
+  <h2 style="margin-top:0">💾 Copia de seguridad</h2>
+  <p class="sub" style="text-align:left">Guarda tus estrellas y victorias. Copia este código y pégalo en otro dispositivo para seguir jugando allí.</p>
+  <textarea id="bkcode" readonly rows="3" style="width:100%;border-radius:12px;padding:8px;background:#0006;color:#fff;border:1px solid #fff4"></textarea>
+  <div class="row"><button class="btn" id="bkcopy">Copiar código</button></div>
+  <p class="sub" style="text-align:left">Para restaurar, pega aquí un código:</p>
+  <textarea id="bkin" rows="3" placeholder="Pega el código" style="width:100%;border-radius:12px;padding:8px;background:#0006;color:#fff;border:1px solid #fff4;-webkit-user-select:text;user-select:text"></textarea>
+  <div class="row"><button class="btn sec" id="bkrestore">Restaurar</button><button class="btn sec" id="bkclose">Cerrar</button></div>
+  <p class="msg" id="bkmsg" style="color:var(--acc)"></p>
+</dialog>
 <dialog id="help">
   <h2 style="margin-top:0">Cómo se juega</h2>
   <ol>
@@ -680,22 +690,58 @@ const KEYP = 'liga-saltos:';
 const mem = {};
 let S = {pid: null, name: '', data: null, mode: null, rounds: 0, ri: 0, gained: 0, manage: false};
 const defaults = () => ({theme: 'futbol', level: 1, best: {}, total: 0, skin: {futbol: 0, coches: 0, espacio: 0}});
-function loadData(pid) {
-  let d = null;
-  try { d = JSON.parse(localStorage.getItem(KEYP + pid)); } catch {}
-  d = d || mem[pid] || defaults();
-  d = Object.assign(defaults(), d, {skin: Object.assign(defaults().skin, d.skin || {})});
+// IMPORTANTE: el progreso (estrellas, victorias, cromos) NO se puede perder entre versiones.
+// Si cambia el formato de los datos, añade un paso en migrate() y sube DATA_VERSION; nunca borres claves ni reinicies totales.
+const DATA_VERSION = 1, KEYB = 'liga-saltos-bak:';
+function migrate(d) {
+  // if (d.v < 2) { ...convertir datos antiguos aquí... }
+  d.total = Math.max(0, +d.total || 0); d.best = d.best && typeof d.best === 'object' ? d.best : {};
   if (!THEMES[d.theme]) d.theme = 'futbol';
   if (!(d.level >= 0 && d.level <= 6)) d.level = 1;
-  return d;
+  d.v = DATA_VERSION; return d;
+}
+function readKey(k) { try { const v = JSON.parse(localStorage.getItem(k)); return v && typeof v === 'object' ? v : null; } catch { return null; } }
+function loadData(pid) {
+  const a = readKey(KEYP + pid), b = readKey(KEYB + pid), m = mem[pid] || null;
+  let d = [a, b, m].filter(Boolean).sort((x, y) => (+y.total || 0) - (+x.total || 0))[0] || defaults();   // nos quedamos con la copia que tenga más estrellas
+  return migrate(Object.assign(defaults(), d, {skin: Object.assign(defaults().skin, d.skin || {})}));
 }
 function saveData() {
   if (!S.pid) return;
-  mem[S.pid] = S.data;
-  try { localStorage.setItem(KEYP + S.pid, JSON.stringify(S.data)); } catch {}
+  mem[S.pid] = S.data; const j = JSON.stringify(S.data);
+  try { localStorage.setItem(KEYP + S.pid, j); localStorage.setItem(KEYB + S.pid, j); } catch {}
 }
 const themeKey = () => S.data.theme;
 const th = () => THEMES[S.data.theme];
+
+// ---------- Copia de seguridad ----------
+const enc = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+const dec = t => JSON.parse(decodeURIComponent(escape(atob(t.trim()))));
+function exportCode() {
+  const data = {}; for (const id of Object.keys(LigaPerfiles.map)) data[id] = loadData(id);
+  return enc({app: 'liga-saltos', v: DATA_VERSION, players: LigaPerfiles.map, data});
+}
+function importCode(t) {
+  const o = dec(t); if (!o || o.app !== 'liga-saltos' || !o.players) throw new Error('Código no válido');
+  let pl = {}; try { pl = JSON.parse(localStorage.getItem('liga-mate:jugadores') || '{}'); } catch {}
+  for (const [id, name] of Object.entries(o.players)) {
+    if (typeof name !== 'string') continue;
+    if (!pl[id]) pl[id] = name.slice(0, 12);
+    const cur = readKey(KEYP + id) || readKey(KEYB + id) || mem[id], inc = o.data && o.data[id] ? migrate(Object.assign(defaults(), o.data[id])) : null;
+    if (inc) {
+      const m = cur ? migrate(Object.assign(defaults(), cur)) : inc;
+      if (cur) { m.total = Math.max(m.total, inc.total); for (const [k, v] of Object.entries(inc.best)) m.best[k] = Math.max(m.best[k] || 0, v); }
+      mem[id] = m; try { localStorage.setItem(KEYP + id, JSON.stringify(m)); localStorage.setItem(KEYB + id, JSON.stringify(m)); } catch {}
+    }
+  }
+  try { localStorage.setItem('liga-mate:jugadores', JSON.stringify(pl)); } catch {}
+  LigaPerfiles.reload(); Object.assign(LigaPerfiles.map, pl);
+}
+$('bkb').onclick = () => { $('bkcode').value = exportCode(); $('bkmsg').textContent = ''; $('backup').showModal(); };
+$('bkcopy').onclick = async () => { $('bkcode').select(); try { await navigator.clipboard.writeText($('bkcode').value); $('bkmsg').textContent = '✔ Copiado'; } catch { document.execCommand && document.execCommand('copy'); $('bkmsg').textContent = 'Copia el texto de arriba'; } };
+$('bkrestore').onclick = () => { try { importCode($('bkin').value); $('bkmsg').textContent = '✔ Progreso restaurado'; $('bkin').value = ''; renderPlayers(); } catch (e) { $('bkmsg').textContent = '✖ ' + e.message; } };
+$('bkclose').onclick = () => $('backup').close();
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 // ---------- Vistas ----------
 let view = 'vPlayers';
