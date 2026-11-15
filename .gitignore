@@ -1,0 +1,24 @@
+# Secretos y credenciales (este proyecto no usa ninguno; por si acaso)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*secret*
+*credentials*
+*.token
+.npmrc
+# Sistema y herramientas
+.DS_Store
+Thumbs.db
+node_modules/
+.playwright-mcp/
+.claude/
+*.log
+*.zip
+*.swp
+.idea/
+.vscode/
